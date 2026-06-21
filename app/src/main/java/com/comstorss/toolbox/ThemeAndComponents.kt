@@ -1,5 +1,25 @@
 package com.comstorss.toolbox
 
+import kotlinx.coroutines.withContext
+
+import kotlinx.coroutines.Dispatchers
+
+import androidx.compose.ui.platform.LocalContext
+
+import androidx.compose.ui.layout.ContentScale
+
+import androidx.compose.ui.graphics.asImageBitmap
+
+import androidx.compose.runtime.setValue
+
+import androidx.compose.runtime.mutableStateOf
+
+import androidx.compose.foundation.layout.fillMaxSize
+
+import androidx.compose.foundation.Image
+
+import android.graphics.BitmapFactory
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.animateContentSize
@@ -105,16 +125,17 @@ fun toolboxPalette(): ToolboxPalette = LocalToolboxPalette.current
 @Composable
 fun ToolboxApp(vm: ToolboxViewModel) {
     val theme by vm.theme.collectAsState()
+    val personalization by vm.personalization.collectAsState()
     val dark = when (theme) {
         ThemeMode.System -> isSystemInDarkTheme()
         ThemeMode.Light -> false
         ThemeMode.Dark -> true
     }
-    ComstTheme(dark = dark) { AppRoot(vm, theme) }
+    ComstTheme(dark = dark, personalization = personalization) { AppRoot(vm, theme) }
 }
 
 @Composable
-fun ComstTheme(dark: Boolean, content: @Composable () -> Unit) {
+fun ComstTheme(dark: Boolean, personalization: PersonalizationState = PersonalizationState(), content: @Composable () -> Unit) {
     val lightScheme = lightColorScheme(
         primary = Color(0xFF0284C7),
         onPrimary = Color.White,
@@ -139,15 +160,15 @@ fun ComstTheme(dark: Boolean, content: @Composable () -> Unit) {
             cardStrong = Color(0xFF121624),
             cardBorder = Color(0xFF242E42),
             cardMuted = Color(0xFF1D243A),
-            accent = Color(0xFF38BDF8),
-            accentStrong = Color(0xFF0284C7),
-            accentSoft = Color(0x1F38BDF8),
+            accent = presetAccent(personalization, dark = true, default = Color(0xFF38BDF8)),
+            accentStrong = presetAccent(personalization, dark = false, default = Color(0xFF0284C7)),
+            accentSoft = presetAccent(personalization, dark = true, default = Color(0xFF38BDF8)).copy(alpha = 0.14f),
             text = Color(0xFFF1F5F9),
             textMuted = Color(0xFFB6C6D8),
             success = Color(0xFF71E3B2),
             error = Color(0xFFFF8A8A),
-            info = Color(0xFF8CD7FF),
-            glow = Color(0x336FD0FF)
+            info = presetAccent(personalization, dark = true, default = Color(0xFF8CD7FF)),
+            glow = presetAccent(personalization, dark = true, default = Color(0xFF6FD0FF)).copy(alpha = 0.20f)
         )
     } else {
         ToolboxPalette(
@@ -157,15 +178,15 @@ fun ComstTheme(dark: Boolean, content: @Composable () -> Unit) {
             cardStrong = Color(0xFFFFFFFF),
             cardBorder = Color(0xFFDFEBF6),
             cardMuted = Color(0xFFE0EFFA),
-            accent = Color(0xFF0284C7),
-            accentStrong = Color(0xFF0284C7),
-            accentSoft = Color(0xFFE0EFFA),
+            accent = presetAccent(personalization, dark = false, default = Color(0xFF0284C7)),
+            accentStrong = presetAccent(personalization, dark = false, default = Color(0xFF0284C7)),
+            accentSoft = presetAccent(personalization, dark = false, default = Color(0xFF0284C7)).copy(alpha = 0.12f),
             text = Color(0xFF1E293B),
             textMuted = Color(0xFF64748B),
             success = Color(0xFF1B9C6A),
             error = Color(0xFFD84E67),
-            info = Color(0xFF157DFF),
-            glow = Color(0x26157DFF)
+            info = presetAccent(personalization, dark = false, default = Color(0xFF157DFF)),
+            glow = presetAccent(personalization, dark = false, default = Color(0xFF157DFF)).copy(alpha = 0.16f)
         )
     }
     val themeMotion = tween<Color>(durationMillis = 360, easing = FastOutSlowInEasing)
@@ -195,11 +216,10 @@ fun ComstTheme(dark: Boolean, content: @Composable () -> Unit) {
             Surface(color = Color.Transparent, contentColor = palette.text) {
                 Box(
                     modifier = Modifier.background(
-                        Brush.verticalGradient(
-                            listOf(palette.backgroundTop, palette.backgroundBottom)
-                        )
+                        Brush.verticalGradient(backgroundColors(personalization, palette, dark))
                     )
                 ) {
+                    BackgroundImageLayer(personalization = personalization, dark = dark)
                     content()
                 }
             }
@@ -207,6 +227,66 @@ fun ComstTheme(dark: Boolean, content: @Composable () -> Unit) {
     }
 }
 
+
+
+private fun presetAccent(personalization: PersonalizationState, dark: Boolean, default: Color): Color {
+    if (personalization.accentPreset == AccentPreset.Ocean) return default
+    val selected = Color(personalization.accentPreset.color)
+    return if (dark) mix(selected, Color.White, 0.24f) else selected
+}
+private fun backgroundColors(personalization: PersonalizationState, palette: ToolboxPalette, dark: Boolean): List<Color> {
+    return when (personalization.backgroundStyle) {
+        BackgroundStyle.Solid -> listOf(palette.backgroundBottom, palette.backgroundBottom)
+        BackgroundStyle.Gradient -> if (personalization.accentPreset == AccentPreset.Ocean) {
+            listOf(palette.backgroundTop, palette.backgroundBottom)
+        } else if (dark) {
+            listOf(mix(palette.backgroundTop, palette.accent, 0.08f), palette.backgroundBottom)
+        } else {
+            listOf(mix(palette.backgroundTop, palette.accent, 0.08f), mix(palette.backgroundBottom, palette.accent, 0.04f))
+        }
+        BackgroundStyle.Image -> listOf(palette.backgroundTop, palette.backgroundBottom)
+    }
+}
+
+@Composable
+private fun BackgroundImageLayer(personalization: PersonalizationState, dark: Boolean) {
+    if (personalization.backgroundStyle != BackgroundStyle.Image || personalization.backgroundImageUri.isNullOrBlank()) return
+    val context = LocalContext.current
+    var image by remember(personalization.backgroundImageUri) { mutableStateOf<androidx.compose.ui.graphics.ImageBitmap?>(null) }
+    LaunchedEffect(personalization.backgroundImageUri) {
+        image = withContext(Dispatchers.IO) {
+            runCatching {
+                context.contentResolver.openInputStream(android.net.Uri.parse(personalization.backgroundImageUri))?.use { input ->
+                    BitmapFactory.decodeStream(input)?.asImageBitmap()
+                }
+            }.getOrNull()
+        }
+    }
+    image?.let { bitmap ->
+        Image(
+            bitmap = bitmap,
+            contentDescription = null,
+            modifier = Modifier.fillMaxSize(),
+            contentScale = ContentScale.Crop,
+            alpha = 0.82f
+        )
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = (personalization.backgroundImageTone.overlayAlpha + if (dark) 0.12f else 0f).coerceIn(0f, 0.72f)))
+        )
+    }
+}
+
+private fun mix(from: Color, to: Color, amount: Float): Color {
+    val t = amount.coerceIn(0f, 1f)
+    return Color(
+        red = from.red + (to.red - from.red) * t,
+        green = from.green + (to.green - from.green) * t,
+        blue = from.blue + (to.blue - from.blue) * t,
+        alpha = from.alpha + (to.alpha - from.alpha) * t
+    )
+}
 @Composable
 fun GlassCard(
     modifier: Modifier = Modifier,
@@ -270,7 +350,9 @@ fun PrimaryActionButton(
     icon: ImageVector,
     click: () -> Unit,
     modifier: Modifier = Modifier,
-    loading: Boolean = false
+    loading: Boolean = false,
+    loadingText: String = "\u5904\u7406\u4e2d",
+    enabled: Boolean = true
 ) {
     val palette = toolboxPalette()
     val source = remember { MutableInteractionSource() }
@@ -278,7 +360,7 @@ fun PrimaryActionButton(
     val scale by animateFloatAsState(if (pressed) 0.958f else 1f, spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow), label = "primaryScale")
     Button(
         onClick = click,
-        enabled = !loading,
+        enabled = enabled && !loading,
         modifier = modifier.scale(scale),
         interactionSource = source,
         shape = InnerRadius,
@@ -301,7 +383,7 @@ fun PrimaryActionButton(
             Icon(icon, null, modifier = Modifier.size(18.dp))
         }
         Spacer(Modifier.width(8.dp))
-        Text(if (loading) "\u5904\u7406\u4e2d" else text, fontWeight = FontWeight.SemiBold)
+        Text(if (loading) loadingText else text, fontWeight = FontWeight.SemiBold)
     }
 }
 
@@ -311,7 +393,9 @@ fun SecondaryActionButton(
     icon: ImageVector,
     click: () -> Unit,
     modifier: Modifier = Modifier,
-    enabled: Boolean = true
+    enabled: Boolean = true,
+    loading: Boolean = false,
+    loadingText: String = "\u5904\u7406\u4e2d"
 ) {
     val palette = toolboxPalette()
     val source = remember { MutableInteractionSource() }
@@ -319,7 +403,7 @@ fun SecondaryActionButton(
     val scale by animateFloatAsState(if (pressed) 0.958f else 1f, spring(dampingRatio = Spring.DampingRatioNoBouncy, stiffness = Spring.StiffnessMediumLow), label = "secondaryScale")
     OutlinedButton(
         onClick = click,
-        enabled = enabled,
+        enabled = enabled && !loading,
         modifier = modifier.scale(scale),
         interactionSource = source,
         shape = InnerRadius,
@@ -330,9 +414,18 @@ fun SecondaryActionButton(
             contentColor = palette.accent
         )
     ) {
-        Icon(icon, null, modifier = Modifier.size(18.dp))
+        AnimatedVisibility(loading, enter = fadeIn(tween(140)), exit = fadeOut(tween(120))) {
+            CircularProgressIndicator(
+                modifier = Modifier.size(18.dp),
+                strokeWidth = 2.dp,
+                color = palette.accent
+            )
+        }
+        AnimatedVisibility(!loading, enter = fadeIn(tween(140)), exit = fadeOut(tween(120))) {
+            Icon(icon, null, modifier = Modifier.size(18.dp))
+        }
         Spacer(Modifier.width(8.dp))
-        Text(text, fontWeight = FontWeight.Medium)
+        Text(if (loading) loadingText else text, fontWeight = FontWeight.Medium)
     }
 }
 

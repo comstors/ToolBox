@@ -2,12 +2,14 @@ package com.comstorss.toolbox
 
 import android.app.Application
 import android.content.Context
+import android.content.Intent
 import android.net.Uri
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.ViewModelProvider
 import androidx.lifecycle.viewModelScope
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -20,13 +22,18 @@ class ToolboxViewModel(app: Application) : AndroidViewModel(app) {
     private val imagePdf = ImagePdfService(app)
     private val docxPdf = DocxPdfService(app)
     private val videoService = VideoService(app)
+    private val speedTestService = NetworkSpeedTestService(app)
     private val historyStore = HistoryStore(app)
     private val fileActions = FileActionService(app)
+    private var speedTestJob: Job? = null
 
     val modules = ModuleRegistry.modules
 
     private val _theme = MutableStateFlow(ThemeMode.valueOf(prefs.getString("theme", ThemeMode.System.name) ?: ThemeMode.System.name))
     val theme: StateFlow<ThemeMode> = _theme.asStateFlow()
+
+    private val _personalization = MutableStateFlow(loadPersonalization())
+    val personalization: StateFlow<PersonalizationState> = _personalization.asStateFlow()
 
     private val _tasks = MutableStateFlow<List<ToolboxTask>>(emptyList())
     val tasks: StateFlow<List<ToolboxTask>> = _tasks.asStateFlow()
@@ -40,9 +47,64 @@ class ToolboxViewModel(app: Application) : AndroidViewModel(app) {
     private val _notice = MutableStateFlow<String?>(null)
     val notice: StateFlow<String?> = _notice.asStateFlow()
 
+    private val _speedTest = MutableStateFlow(SpeedTestUiState(network = speedTestService.networkKind()))
+    val speedTest: StateFlow<SpeedTestUiState> = _speedTest.asStateFlow()
+
     fun setTheme(mode: ThemeMode) {
         prefs.edit().putString("theme", mode.name).apply()
         _theme.value = mode
+    }
+
+    fun setAccentPreset(preset: AccentPreset) {
+        updatePersonalization(_personalization.value.copy(accentPreset = preset))
+    }
+
+    fun setBackgroundStyle(style: BackgroundStyle) {
+        updatePersonalization(_personalization.value.copy(backgroundStyle = style))
+    }
+
+    fun setBackgroundImage(uri: Uri?) {
+        val app = getApplication<Application>()
+        if (uri != null) {
+            runCatching {
+                app.contentResolver.takePersistableUriPermission(uri, Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+        }
+        updatePersonalization(_personalization.value.copy(
+            backgroundStyle = if (uri == null) BackgroundStyle.Gradient else BackgroundStyle.Image,
+            backgroundImageUri = uri?.toString()
+        ))
+    }
+
+    fun setBackgroundImageTone(tone: BackgroundImageTone) {
+        updatePersonalization(_personalization.value.copy(backgroundImageTone = tone))
+    }
+
+    fun resetPersonalization() {
+        updatePersonalization(PersonalizationState())
+        _notice.value = "\u5916\u89c2\u5df2\u6062\u590d\u9ed8\u8ba4"
+    }
+
+    private fun updatePersonalization(state: PersonalizationState) {
+        prefs.edit()
+            .putString("accentPreset", state.accentPreset.name)
+            .putString("backgroundStyle", state.backgroundStyle.name)
+            .putString("backgroundImageUri", state.backgroundImageUri)
+            .putString("backgroundImageTone", state.backgroundImageTone.name)
+            .apply()
+        _personalization.value = state
+    }
+
+    private fun loadPersonalization(): PersonalizationState {
+        fun <T : Enum<T>> enumValue(name: String?, fallback: T, values: Array<T>): T {
+            return values.firstOrNull { it.name == name } ?: fallback
+        }
+        return PersonalizationState(
+            accentPreset = enumValue(prefs.getString("accentPreset", null), AccentPreset.Ocean, AccentPreset.entries.toTypedArray()),
+            backgroundStyle = enumValue(prefs.getString("backgroundStyle", null), BackgroundStyle.Gradient, BackgroundStyle.entries.toTypedArray()),
+            backgroundImageUri = prefs.getString("backgroundImageUri", null),
+            backgroundImageTone = enumValue(prefs.getString("backgroundImageTone", null), BackgroundImageTone.Soft, BackgroundImageTone.entries.toTypedArray())
+        )
     }
 
     fun clearNotice() { _notice.value = null }
@@ -96,6 +158,71 @@ class ToolboxViewModel(app: Application) : AndroidViewModel(app) {
         _history.value = _history.value.filterNot { it.id == record.id }
         persistHistory()
         _notice.value = "\u5386\u53f2\u8bb0\u5f55\u5df2\u5220\u9664"
+    }
+
+
+    fun startSpeedTest() {
+        if (_speedTest.value.phase == SpeedTestPhase.Testing) return
+        speedTestJob?.cancel()
+        val network = speedTestService.networkKind()
+        _speedTest.value = SpeedTestUiState(phase = SpeedTestPhase.Testing, network = network)
+        speedTestJob = viewModelScope.launch {
+            val result = speedTestService.runDownloadTest { sample ->
+                _speedTest.value = _speedTest.value.copy(
+                    phase = SpeedTestPhase.Testing,
+                    currentMbps = sample.currentMbps,
+                    maxMbps = sample.maxMbps,
+                    averageMbps = sample.averageMbps,
+                    elapsedMillis = sample.elapsedMillis,
+                    network = sample.network,
+                    rating = ratingFor(sample.averageMbps),
+                    errorMessage = null
+                )
+            }
+            result.onSuccess { output ->
+                _speedTest.value = _speedTest.value.copy(
+                    phase = SpeedTestPhase.Finished,
+                    currentMbps = 0.0,
+                    maxMbps = output.maxMbps,
+                    averageMbps = output.averageMbps,
+                    elapsedMillis = output.elapsedMillis,
+                    network = output.network,
+                    rating = output.rating,
+                    errorMessage = null
+                )
+                _notice.value = "\u6d4b\u901f\u5b8c\u6210"
+            }.onFailure { error ->
+                val message = error.message ?: "\u6d4b\u901f\u5931\u8d25"
+                _speedTest.value = _speedTest.value.copy(
+                    phase = SpeedTestPhase.Failed,
+                    currentMbps = 0.0,
+                    errorMessage = message
+                )
+                _notice.value = message
+            }
+        }
+    }
+
+    fun stopSpeedTest() {
+        if (_speedTest.value.phase != SpeedTestPhase.Testing) return
+        speedTestService.cancel()
+        speedTestJob?.cancel()
+        val state = _speedTest.value
+        _speedTest.value = state.copy(
+            phase = SpeedTestPhase.Stopped,
+            currentMbps = 0.0,
+            rating = ratingFor(state.averageMbps),
+            errorMessage = null
+        )
+        _notice.value = "\u6d4b\u901f\u5df2\u505c\u6b62"
+    }
+
+    private fun ratingFor(mbps: Double): SpeedRating = when {
+        mbps >= 100.0 -> SpeedRating.Excellent
+        mbps >= 50.0 -> SpeedRating.Good
+        mbps >= 15.0 -> SpeedRating.Normal
+        mbps > 0.0 -> SpeedRating.Slow
+        else -> SpeedRating.Unknown
     }
 
     fun parseVideo(input: String) = viewModelScope.launch {

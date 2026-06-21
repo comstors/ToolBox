@@ -1,5 +1,21 @@
 package com.comstorss.toolbox
 
+import androidx.compose.foundation.border
+
+import androidx.compose.material.icons.rounded.RestartAlt
+
+import androidx.compose.material.icons.rounded.Image
+
+import androidx.compose.foundation.rememberScrollState
+
+import androidx.compose.foundation.horizontalScroll
+
+import androidx.activity.result.contract.ActivityResultContracts
+
+import androidx.activity.compose.rememberLauncherForActivityResult
+
+import android.net.Uri
+
 import androidx.compose.animation.AnimatedVisibility
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Spring
@@ -169,47 +185,177 @@ fun HistoryCard(r: HistoryRecord, vm: ToolboxViewModel) {
 }
 
 @Composable
-fun SettingsScreen(theme: ThemeMode, setTheme: (ThemeMode) -> Unit, clear: () -> Unit) = androidx.compose.foundation.lazy.LazyColumn(
-    contentPadding = PaddingValues(bottom = 20.dp),
-    verticalArrangement = Arrangement.spacedBy(14.dp)
-) {
-    item {
-        GlassCard(modifier = Modifier.fillMaxWidth()) {
-            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                SectionHeader(
-                    title = "\u4e3b\u9898",
-                    subtitle = "\u53ef\u4ee5\u9009\u62e9\u6d45\u8272\u3001\u6df1\u8272\u6216\u8ddf\u968f\u7cfb\u7edf\u3002"
-                )
-                ThemeMode.entries.forEach { mode ->
-                    ThemeRow(mode = mode, selected = theme == mode) { setTheme(mode) }
+fun SettingsScreen(vm: ToolboxViewModel, theme: ThemeMode, setTheme: (ThemeMode) -> Unit, clear: () -> Unit) {
+    val personalization by vm.personalization.collectAsState()
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+        vm.setBackgroundImage(uri)
+    }
+
+    androidx.compose.foundation.lazy.LazyColumn(
+        contentPadding = PaddingValues(bottom = 20.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp)
+    ) {
+        item {
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    SectionHeader(
+                        title = "\u4e3b\u9898",
+                        subtitle = "\u53ef\u4ee5\u9009\u62e9\u6d45\u8272\u3001\u6df1\u8272\u6216\u8ddf\u968f\u7cfb\u7edf\u3002"
+                    )
+                    ThemeMode.entries.forEach { mode ->
+                        ThemeRow(mode = mode, selected = theme == mode) { setTheme(mode) }
+                    }
                 }
             }
         }
-    }
-    item {
-        Feature(
-            icon = Icons.Rounded.Settings,
-            title = "\u7f13\u5b58",
-            body = "\u6e05\u7406\u4e34\u65f6\u6587\u4ef6\uff0c\u4e0d\u5f71\u54cd\u5df2\u7ecf\u4fdd\u5b58\u7684\u8f93\u51fa\u6587\u4ef6\u3002",
-            button = "\u6e05\u7406\u7f13\u5b58",
-            click = clear
-        )
-    }
-    item {
-        GlassCard(modifier = Modifier.fillMaxWidth()) {
-            Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                SectionHeader(
-                    title = "\u5173\u4e8e",
-                    subtitle = "\u5e94\u7528\u4fe1\u606f\u548c\u4f5c\u8005\u8054\u7cfb\u65b9\u5f0f\u3002"
-                )
-                SettingLine("\u5e94\u7528", "Mingyu Toolbox")
-                SettingLine("\u4f5c\u8005\u5fae\u4fe1", "comstorss")
-                SettingLine("\u8bf4\u660e", "\u5f00\u6e90\u8f6f\u4ef6\uff0c\u4ec5\u4f9b\u81ea\u5df1\u4f7f\u7528")
+        item {
+            AppearanceSettingsCard(
+                personalization = personalization,
+                setAccent = vm::setAccentPreset,
+                setBackgroundStyle = vm::setBackgroundStyle,
+                setTone = vm::setBackgroundImageTone,
+                chooseImage = { imagePicker.launch(arrayOf("image/*")) },
+                clearImage = { vm.setBackgroundImage(null) },
+                reset = vm::resetPersonalization
+            )
+        }
+        item {
+            Feature(
+                icon = Icons.Rounded.Settings,
+                title = "\u7f13\u5b58",
+                body = "\u6e05\u7406\u4e34\u65f6\u6587\u4ef6\uff0c\u4e0d\u5f71\u54cd\u5df2\u7ecf\u4fdd\u5b58\u7684\u8f93\u51fa\u6587\u4ef6\u3002",
+                button = "\u6e05\u7406\u7f13\u5b58",
+                click = clear
+            )
+        }
+        item {
+            GlassCard(modifier = Modifier.fillMaxWidth()) {
+                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+                    SectionHeader(
+                        title = "\u5173\u4e8e",
+                        subtitle = "\u5e94\u7528\u4fe1\u606f\u548c\u4f5c\u8005\u8054\u7cfb\u65b9\u5f0f\u3002"
+                    )
+                    SettingLine("\u5e94\u7528", "Mingyu Toolbox")
+                    SettingLine("\u4f5c\u8005\u5fae\u4fe1", "comstorss")
+                    SettingLine("\u8bf4\u660e", "\u5f00\u6e90\u8f6f\u4ef6\uff0c\u4ec5\u4f9b\u81ea\u5df1\u4f7f\u7528")
+                }
             }
         }
     }
 }
 
+@Composable
+private fun AppearanceSettingsCard(
+    personalization: PersonalizationState,
+    setAccent: (AccentPreset) -> Unit,
+    setBackgroundStyle: (BackgroundStyle) -> Unit,
+    setTone: (BackgroundImageTone) -> Unit,
+    chooseImage: () -> Unit,
+    clearImage: () -> Unit,
+    reset: () -> Unit
+) {
+    GlassCard(modifier = Modifier.fillMaxWidth(), elevated = true) {
+        Column(verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            SectionHeader(
+                title = "\u5916\u89c2\u4e2a\u6027\u5316",
+                subtitle = "\u8c03\u6574\u4e3b\u8272\u3001\u80cc\u666f\u6837\u5f0f\u548c\u81ea\u5b9a\u4e49\u80cc\u666f\u56fe\u3002"
+            )
+            AppearancePreview(personalization)
+            SettingChoiceRow("\u914d\u8272", AccentPreset.entries, personalization.accentPreset, setAccent) { preset ->
+                ColorDot(color = Color(preset.color), selected = preset == personalization.accentPreset)
+                Text(preset.label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
+            }
+            SettingChoiceRow("\u80cc\u666f", BackgroundStyle.entries, personalization.backgroundStyle, setBackgroundStyle) { style ->
+                Text(style.label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
+            }
+            SettingChoiceRow("\u56fe\u7247\u906e\u7f69", BackgroundImageTone.entries, personalization.backgroundImageTone, setTone) { tone ->
+                Text(tone.label, style = MaterialTheme.typography.labelLarge, fontWeight = FontWeight.Medium)
+            }
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), modifier = Modifier.fillMaxWidth()) {
+                SecondaryActionButton(
+                    text = "\u9009\u62e9\u80cc\u666f\u56fe",
+                    icon = Icons.Rounded.Image,
+                    click = chooseImage,
+                    modifier = Modifier.weight(1f)
+                )
+                SecondaryActionButton(
+                    text = "\u79fb\u9664\u56fe\u7247",
+                    icon = Icons.Rounded.Delete,
+                    click = clearImage,
+                    modifier = Modifier.weight(1f),
+                    enabled = personalization.backgroundImageUri != null
+                )
+            }
+            PrimaryActionButton(
+                text = "\u6062\u590d\u9ed8\u8ba4\u5916\u89c2",
+                icon = Icons.Rounded.RestartAlt,
+                click = reset,
+                modifier = Modifier.fillMaxWidth()
+            )
+        }
+    }
+}
+
+@Composable
+private fun AppearancePreview(personalization: PersonalizationState) {
+    val palette = toolboxPalette()
+    Box(
+        modifier = Modifier
+            .fillMaxWidth()
+            .height(96.dp)
+            .clip(MaterialTheme.shapes.large)
+            .background(
+                androidx.compose.ui.graphics.Brush.horizontalGradient(
+                    listOf(Color(personalization.accentPreset.color).copy(alpha = 0.24f), palette.cardMuted)
+                )
+            )
+            .padding(14.dp)
+    ) {
+        Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Text("\u9884\u89c8", style = MaterialTheme.typography.labelLarge, color = palette.textMuted)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp), verticalAlignment = Alignment.CenterVertically) {
+                ColorDot(color = Color(personalization.accentPreset.color), selected = true)
+                Text(personalization.accentPreset.label, fontWeight = FontWeight.Black)
+                Text("\u00b7 ${personalization.backgroundStyle.label}", color = palette.textMuted)
+            }
+        }
+    }
+}
+
+@Composable
+private fun <T> SettingChoiceRow(
+    title: String,
+    values: List<T>,
+    selected: T,
+    onSelected: (T) -> Unit,
+    item: @Composable (T) -> Unit
+) {
+    Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
+        Text(title, style = MaterialTheme.typography.labelLarge, color = toolboxPalette().textMuted)
+        Row(modifier = Modifier.horizontalScroll(rememberScrollState()), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            values.forEach { value ->
+                Pressable(selected = value == selected, onClick = { onSelected(value) }) {
+                    Row(
+                        modifier = Modifier.padding(horizontal = 13.dp, vertical = 10.dp),
+                        horizontalArrangement = Arrangement.spacedBy(8.dp),
+                        verticalAlignment = Alignment.CenterVertically
+                    ) { item(value) }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun ColorDot(color: Color, selected: Boolean) {
+    Box(
+        modifier = Modifier
+            .size(if (selected) 24.dp else 20.dp)
+            .clip(CircleShape)
+            .background(color)
+            .border(1.dp, if (selected) toolboxPalette().text else toolboxPalette().cardBorder, CircleShape)
+    )
+}
 @Composable
 fun ThemeRow(mode: ThemeMode, selected: Boolean, click: () -> Unit) {
     val palette = toolboxPalette()

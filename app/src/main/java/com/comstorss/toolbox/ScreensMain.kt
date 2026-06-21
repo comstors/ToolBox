@@ -68,6 +68,7 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Article
 import androidx.compose.material.icons.rounded.ArrowBack
+import androidx.compose.material.icons.rounded.ContentPaste
 import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.Image
 import androidx.compose.material.icons.rounded.Pending
@@ -94,6 +95,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.luminance
 import androidx.compose.ui.graphics.vector.ImageVector
+import androidx.compose.ui.platform.LocalClipboardManager
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
@@ -414,11 +416,12 @@ fun MainShell(vm: ToolboxViewModel, theme: ThemeMode) {
                     when (state.first) {
                         Route.Convert -> ConvertScreen(vm)
                         Route.Video -> VideoScreen(vm)
+                        Route.SpeedTest -> SpeedTestScreen(vm)
                         Route.Home -> when (state.second) {
                             MainTab.Home -> HomeScreen(vm.modules) { route = it }
                             MainTab.Tasks -> TaskScreen(vm)
                             MainTab.History -> HistoryScreen(vm)
-                            MainTab.Settings -> SettingsScreen(theme, vm::setTheme, vm::clearCache)
+                            MainTab.Settings -> SettingsScreen(vm, theme, vm::setTheme, vm::clearCache)
                         }
                     }
                 }
@@ -453,10 +456,13 @@ private fun ShellHeader(header: HeaderContent, onBack: () -> Unit) {
             },
             label = "headerTransition"
         ) { data ->
-            Column(verticalArrangement = Arrangement.spacedBy(4.dp)) {
+            Column(
+                modifier = Modifier.offset(y = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
                 if (data.showBack) {
                     Text(
-                        text = "返回首页菜单",
+                        text = "\u8fd4\u56de\u9996\u9875\u83dc\u5355",
                         color = palette.textMuted,
                         style = MaterialTheme.typography.labelMedium,
                         fontWeight = FontWeight.SemiBold,
@@ -774,8 +780,10 @@ private fun SoftNote(text: String) {
 @Composable
 fun VideoScreen(vm: ToolboxViewModel) {
     var url by remember { mutableStateOf("") }
+    val clipboard = LocalClipboardManager.current
     val info by vm.video.collectAsState()
     val tasks by vm.tasks.collectAsState()
+    val parsing = tasks.any { it.status == TaskStatus.Running && it.title.contains("\u89e3\u6790") }
     val downloading = tasks.any { it.status == TaskStatus.Running && it.title.contains("\u4e0b\u8f7d") }
 
     LazyColumn(
@@ -799,19 +807,36 @@ fun VideoScreen(vm: ToolboxViewModel) {
                         shape = MaterialTheme.shapes.large,
                         colors = tintedFieldColors()
                     )
+                    SecondaryActionButton(
+                        text = "\u7c98\u8d34\u526a\u8d34\u677f\u94fe\u63a5",
+                        icon = Icons.Rounded.ContentPaste,
+                        click = {
+                            val pasted = clipboard.getText()?.text?.trim().orEmpty()
+                            if (pasted.isNotEmpty()) {
+                                url = pasted
+                            }
+                        },
+                        modifier = Modifier.fillMaxWidth(),
+                        enabled = !parsing && !downloading
+                    )
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                         SecondaryActionButton(
                             text = "\u89e3\u6790\u94fe\u63a5",
                             icon = Icons.Rounded.Pending,
                             click = { vm.parseVideo(url) },
-                            modifier = Modifier.weight(1f)
+                            modifier = Modifier.weight(1f),
+                            enabled = !downloading,
+                            loading = parsing,
+                            loadingText = "\u89e3\u6790\u4e2d"
                         )
                         PrimaryActionButton(
                             text = "\u4e0b\u8f7d",
                             icon = Icons.Rounded.Download,
                             click = vm::downloadVideo,
                             modifier = Modifier.weight(1f),
-                            loading = downloading
+                            loading = downloading,
+                            loadingText = "\u4e0b\u8f7d\u4e2d",
+                            enabled = !parsing
                         )
                     }
                 }
@@ -855,6 +880,7 @@ private fun screenMotionIndex(state: Pair<Route, MainTab>): Int {
         Route.Home -> tab.ordinal
         Route.Convert -> MainTab.entries.size
         Route.Video -> MainTab.entries.size + 1
+        Route.SpeedTest -> MainTab.entries.size + 2
     }
 }
 
@@ -874,6 +900,12 @@ private fun headerFor(route: Route, tab: MainTab): HeaderContent {
             eyebrow = "\u89c6\u9891\u4e0b\u8f7d",
             title = "\u89e3\u6790\u540e\u518d\u4fdd\u5b58",
             subtitle = "\u5148\u8bc6\u522b\u5e73\u53f0\u548c\u72b6\u6001\uff0c\u518d\u51b3\u5b9a\u662f\u5426\u80fd\u4e0b\u8f7d\u3002",
+            showBack = true
+        )
+        Route.SpeedTest -> HeaderContent(
+            eyebrow = "\u7f51\u7edc\u6d4b\u901f",
+            title = "\u4e0b\u8f7d\u901f\u5ea6\u4f30\u7b97",
+            subtitle = "\u8f7b\u91cf\u6d4b\u8bd5\u5f53\u524d\u7f51\u7edc\u4e0b\u8f7d\u8868\u73b0\u3002",
             showBack = true
         )
         Route.Home -> when (tab) {
