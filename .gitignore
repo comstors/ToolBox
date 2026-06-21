@@ -1,0 +1,25 @@
+# Gradle / Android build output
+.gradle/
+build/
+**/build/
+.kotlin/
+
+# Android Studio / local machine files
+.idea/
+*.iml
+local.properties
+
+# Generated APKs and signing artifacts
+*.apk
+*.aab
+*.jks
+*.keystore
+
+# OS / editor noise
+.DS_Store
+Thumbs.db
+*.log
+
+# Temporary files
+*.tmp
+*.bak
