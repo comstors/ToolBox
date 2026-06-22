@@ -75,6 +75,7 @@ import androidx.compose.material.icons.rounded.Pending
 import androidx.compose.material.icons.rounded.TaskAlt
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.Icon
+import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Scaffold
@@ -379,6 +380,7 @@ fun MainShell(vm: ToolboxViewModel, theme: ThemeMode) {
     var tab by remember { mutableStateOf(MainTab.Home) }
     var route by remember { mutableStateOf(Route.Home) }
     val notice by vm.notice.collectAsState()
+    val update by vm.update.collectAsState()
     val reader by vm.reader.collectAsState()
     BackHandler(enabled = route != Route.Home || tab != MainTab.Home) {
         if (route != Route.Home) route = Route.Home else tab = MainTab.Home
@@ -437,10 +439,94 @@ fun MainShell(vm: ToolboxViewModel, theme: ThemeMode) {
             ) {
                 Notice(notice.orEmpty(), vm::clearNotice)
             }
+            UpdateDialog(
+                state = update,
+                dismiss = vm::dismissUpdateDialog,
+                startDownload = vm::startUpdateDownload,
+                install = vm::openDownloadedUpdate,
+                modifier = Modifier.align(Alignment.Center)
+            )
         }
     }
 }
 
+@Composable
+private fun UpdateDialog(
+    state: UpdateUiState,
+    dismiss: () -> Unit,
+    startDownload: () -> Unit,
+    install: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    AnimatedVisibility(
+        visible = state.dialogVisible,
+        enter = fadeIn(tween(180)) + scaleIn(initialScale = 0.96f, animationSpec = tween(220, easing = FastOutSlowInEasing)),
+        exit = fadeOut(tween(140)) + scaleOut(targetScale = 0.96f, animationSpec = tween(140)),
+        modifier = Modifier.fillMaxSize()
+    ) {
+        Box(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(Color.Black.copy(alpha = 0.38f))
+                .padding(horizontal = 22.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            val info = state.info
+            GlassCard(modifier = modifier.fillMaxWidth(), elevated = true) {
+                Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                    SectionHeader(
+                        title = if (state.phase == UpdatePhase.ReadyToInstall) "\u5b89\u88c5\u5305\u5df2\u51c6\u5907\u597d" else "\u53d1\u73b0\u65b0\u7248\u672c",
+                        subtitle = info?.let { "Mingyu Toolbox ${it.versionName}" } ?: "\u6b63\u5728\u68c0\u67e5\u66f4\u65b0"
+                    )
+                    if (!info?.changelog.isNullOrEmpty()) {
+                        Column(verticalArrangement = Arrangement.spacedBy(7.dp)) {
+                            info?.changelog?.forEach { item ->
+                                Text("• $item", color = toolboxPalette().textMuted, style = MaterialTheme.typography.bodyMedium)
+                            }
+                        }
+                    } else {
+                        Text("\u8fd9\u4e2a\u7248\u672c\u5e26\u6765\u4e86\u4e00\u4e9b\u4f53\u9a8c\u6539\u8fdb\u548c\u95ee\u9898\u4fee\u590d\u3002", color = toolboxPalette().textMuted)
+                    }
+                    if (state.phase == UpdatePhase.Downloading) {
+                        LinearProgressIndicator(
+                            progress = { state.downloadProgress.coerceIn(0f, 1f) },
+                            modifier = Modifier.fillMaxWidth().height(8.dp).clip(CircleShape),
+                            color = toolboxPalette().accent,
+                            trackColor = toolboxPalette().cardMuted
+                        )
+                        Text("\u6b63\u5728\u4e0b\u8f7d ${(state.downloadProgress * 100).toInt()}%", color = toolboxPalette().textMuted, style = MaterialTheme.typography.bodySmall)
+                    }
+                    state.errorMessage?.let { message ->
+                        Text(message, color = toolboxPalette().error, style = MaterialTheme.typography.bodySmall)
+                    }
+                    Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        if (info?.forceUpdate != true && state.phase != UpdatePhase.Downloading) {
+                            SecondaryActionButton(
+                                text = "\u7a0d\u540e\u518d\u8bf4",
+                                icon = Icons.Rounded.Pending,
+                                click = dismiss,
+                                modifier = Modifier.weight(1f)
+                            )
+                        }
+                        val actionText = when (state.phase) {
+                            UpdatePhase.Downloading -> "\u4e0b\u8f7d\u4e2d"
+                            UpdatePhase.ReadyToInstall -> "\u7ee7\u7eed\u5b89\u88c5"
+                            else -> "\u7acb\u5373\u66f4\u65b0"
+                        }
+                        PrimaryActionButton(
+                            text = actionText,
+                            icon = Icons.Rounded.Download,
+                            click = if (state.phase == UpdatePhase.ReadyToInstall) install else startDownload,
+                            modifier = Modifier.weight(1f),
+                            loading = state.phase == UpdatePhase.Downloading,
+                            loadingText = "\u4e0b\u8f7d\u4e2d"
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
 @Composable
 private fun ShellHeader(header: HeaderContent, onBack: () -> Unit) {
     val palette = toolboxPalette()

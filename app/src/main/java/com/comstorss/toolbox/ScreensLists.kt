@@ -59,6 +59,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.CheckCircle
 import androidx.compose.material.icons.rounded.DarkMode
 import androidx.compose.material.icons.rounded.Delete
+import androidx.compose.material.icons.rounded.Download
 import androidx.compose.material.icons.rounded.LightMode
 import androidx.compose.material.icons.rounded.OpenInNew
 import androidx.compose.material.icons.rounded.Pending
@@ -204,6 +205,7 @@ fun HistoryCard(r: HistoryRecord, vm: ToolboxViewModel) {
 @Composable
 fun SettingsScreen(vm: ToolboxViewModel, theme: ThemeMode, setTheme: (ThemeMode) -> Unit, clear: () -> Unit) {
     val personalization by vm.personalization.collectAsState()
+    val update by vm.update.collectAsState()
     val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
         vm.setBackgroundImage(uri)
     }
@@ -215,10 +217,17 @@ fun SettingsScreen(vm: ToolboxViewModel, theme: ThemeMode, setTheme: (ThemeMode)
         item {
             GlassCard(modifier = Modifier.fillMaxWidth()) {
                 Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
-                    SectionHeader(
-                        title = "\u4e3b\u9898",
-                        subtitle = "\u53ef\u4ee5\u9009\u62e9\u6d45\u8272\u3001\u6df1\u8272\u6216\u8ddf\u968f\u7cfb\u7edf\u3002"
-                    )
+                    Row(verticalAlignment = Alignment.Top, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                        SectionHeader(
+                            title = "\u4e3b\u9898",
+                            subtitle = "\u53ef\u4ee5\u9009\u62e9\u6d45\u8272\u3001\u6df1\u8272\u6216\u8ddf\u968f\u7cfb\u7edf\u3002",
+                            modifier = Modifier.weight(1f)
+                        )
+                        UpdateTinyButton(
+                            update = update,
+                            click = { vm.checkForUpdates(manual = true) }
+                        )
+                    }
                     ThemeMode.entries.forEach { mode ->
                         ThemeRow(mode = mode, selected = theme == mode) { setTheme(mode) }
                     }
@@ -257,7 +266,55 @@ fun SettingsScreen(vm: ToolboxViewModel, theme: ThemeMode, setTheme: (ThemeMode)
                 )
             }
         }
+
         item { AboutFooter() }
+    }
+}
+
+@Composable
+private fun UpdateTinyButton(update: UpdateUiState, click: () -> Unit) {
+    val checking = update.phase == UpdatePhase.Checking
+    val upToDate = update.phase == UpdatePhase.UpToDate
+    val enabled = !checking && !upToDate
+    val label = when (update.phase) {
+        UpdatePhase.Checking -> "\u68c0\u67e5\u4e2d"
+        UpdatePhase.UpToDate -> "\u5df2\u662f\u6700\u65b0"
+        UpdatePhase.Available -> "\u66f4\u65b0"
+        UpdatePhase.Downloading -> "\u4e0b\u8f7d\u4e2d"
+        UpdatePhase.ReadyToInstall -> "\u5b89\u88c5"
+        else -> "\u68c0\u67e5\u66f4\u65b0"
+    }
+    val contentColor = if (upToDate) toolboxPalette().textMuted else toolboxPalette().accent
+    Box(
+        modifier = Modifier
+            .clip(CircleShape)
+            .background(if (upToDate) toolboxPalette().cardMuted else toolboxPalette().accentSoft)
+            .clickable(
+                enabled = enabled,
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = click
+            )
+            .padding(horizontal = 12.dp, vertical = 8.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Row(horizontalArrangement = Arrangement.spacedBy(6.dp), verticalAlignment = Alignment.CenterVertically) {
+            if (checking) {
+                androidx.compose.material3.CircularProgressIndicator(
+                    modifier = Modifier.size(14.dp),
+                    strokeWidth = 2.dp,
+                    color = contentColor
+                )
+            } else {
+                Icon(Icons.Rounded.Download, null, tint = contentColor, modifier = Modifier.size(16.dp))
+            }
+            Text(
+                label,
+                color = contentColor,
+                style = MaterialTheme.typography.labelMedium,
+                fontWeight = FontWeight.SemiBold
+            )
+        }
     }
 }
 

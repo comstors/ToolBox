@@ -112,6 +112,26 @@ data class SpeedTestUiState(
     val errorMessage: String? = null
 )
 
+
+data class UpdateInfo(
+    val versionCode: Long,
+    val versionName: String,
+    val changelog: List<String> = emptyList(),
+    val forceUpdate: Boolean = false,
+    val apkUrl: String = "https://github.com/comstors/ToolBox/releases/download/v${versionName}/MingyuToolBox.apk"
+)
+
+enum class UpdatePhase { Idle, Checking, UpToDate, Available, Downloading, ReadyToInstall, Failed }
+
+data class UpdateUiState(
+    val phase: UpdatePhase = UpdatePhase.Idle,
+    val info: UpdateInfo? = null,
+    val dialogVisible: Boolean = false,
+    val manualCheck: Boolean = false,
+    val downloadProgress: Float = 0f,
+    val downloadedApkPath: String? = null,
+    val errorMessage: String? = null
+)
 enum class ReaderBackground(val label: String) {
     Paper("\u7eb8\u5f20"), Warm("\u6696\u9ec4"), Dark("\u591c\u8bfb")
 }

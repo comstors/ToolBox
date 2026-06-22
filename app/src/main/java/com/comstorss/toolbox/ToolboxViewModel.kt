@@ -16,6 +16,7 @@ import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.io.File
 
 class ToolboxViewModel(app: Application) : AndroidViewModel(app) {
     private val prefs = app.getSharedPreferences("settings", Context.MODE_PRIVATE)
@@ -24,11 +25,13 @@ class ToolboxViewModel(app: Application) : AndroidViewModel(app) {
     private val videoService = VideoService(app)
     private val speedTestService = NetworkSpeedTestService(app)
     private val readerService = ReaderService(app)
+    private val updateService = UpdateService(app)
     private val historyStore = HistoryStore(app)
     private val fileActions = FileActionService(app)
     private var speedTestJob: Job? = null
 
     val modules = ModuleRegistry.modules
+
 
     private val _theme = MutableStateFlow(ThemeMode.valueOf(prefs.getString("theme", ThemeMode.System.name) ?: ThemeMode.System.name))
     val theme: StateFlow<ThemeMode> = _theme.asStateFlow()
@@ -54,6 +57,103 @@ class ToolboxViewModel(app: Application) : AndroidViewModel(app) {
     private val _reader = MutableStateFlow(loadReaderState())
     val reader: StateFlow<ReaderUiState> = _reader.asStateFlow()
 
+    private val _update = MutableStateFlow(UpdateUiState())
+    val update: StateFlow<UpdateUiState> = _update.asStateFlow()
+
+    init {
+        checkForUpdates(manual = false)
+    }
+
+    fun checkForUpdates(manual: Boolean = true) {
+        val state = _update.value
+        if (state.phase == UpdatePhase.Checking || state.phase == UpdatePhase.Downloading) return
+        _update.value = UpdateUiState(phase = UpdatePhase.Checking, manualCheck = manual)
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) { updateService.fetchLatest() }
+            result.onSuccess { info ->
+                val currentCode = updateService.currentVersionCode()
+                val ignoredCode = prefs.getLong("ignoredUpdateVersionCode", -1L)
+                val hasNewVersion = info.versionCode > currentCode
+                if (hasNewVersion && (manual || info.forceUpdate || ignoredCode != info.versionCode)) {
+                    _update.value = UpdateUiState(
+                        phase = UpdatePhase.Available,
+                        info = info,
+                        dialogVisible = true,
+                        manualCheck = manual
+                    )
+                } else {
+                    _update.value = if (manual) {
+                        UpdateUiState(phase = UpdatePhase.UpToDate, manualCheck = true)
+                    } else {
+                        UpdateUiState()
+                    }
+                    if (manual) _notice.value = "当前已是最新版本：${updateService.currentVersionName()}"
+                }
+            }.onFailure { error ->
+                val message = error.message ?: "检查更新失败"
+                _update.value = UpdateUiState(phase = UpdatePhase.Failed, manualCheck = manual, errorMessage = message)
+                if (manual) _notice.value = message
+            }
+        }
+    }
+
+    fun dismissUpdateDialog() {
+        val info = _update.value.info
+        if (info?.forceUpdate == true) return
+        if (info != null) prefs.edit().putLong("ignoredUpdateVersionCode", info.versionCode).apply()
+        _update.value = UpdateUiState()
+    }
+
+    fun startUpdateDownload() {
+        val info = _update.value.info ?: return
+        if (_update.value.phase == UpdatePhase.Downloading) return
+        _update.value = _update.value.copy(
+            phase = UpdatePhase.Downloading,
+            dialogVisible = true,
+            downloadProgress = 0f,
+            errorMessage = null
+        )
+        val task = addTask("\u5e94\u7528\u66f4\u65b0\u4e0b\u8f7d", "\u6b63\u5728\u4e0b\u8f7d Mingyu Toolbox ${info.versionName}")
+        viewModelScope.launch {
+            val result = withContext(Dispatchers.IO) {
+                updateService.downloadApk(info) { progress ->
+                    val safeProgress = progress.coerceIn(0f, 1f)
+                    _update.value = _update.value.copy(downloadProgress = safeProgress)
+                    setProgress(task.id, safeProgress)
+                }
+            }
+            result.onSuccess { file ->
+                finish(task.id, TaskStatus.Success, "\u5b89\u88c5\u5305\u5df2\u4e0b\u8f7d\u5b8c\u6210")
+                _update.value = _update.value.copy(
+                    phase = UpdatePhase.ReadyToInstall,
+                    downloadProgress = 1f,
+                    downloadedApkPath = file.absolutePath,
+                    dialogVisible = true,
+                    errorMessage = null
+                )
+                openDownloadedUpdate()
+            }.onFailure { error ->
+                val message = error.message ?: "更新下载失败"
+                finish(task.id, TaskStatus.Failed, message)
+                _update.value = _update.value.copy(phase = UpdatePhase.Failed, errorMessage = message, dialogVisible = true)
+                _notice.value = message
+            }
+        }
+    }
+
+    fun openDownloadedUpdate() {
+        val path = _update.value.downloadedApkPath ?: return
+        val file = File(path)
+        if (!file.exists()) {
+            _notice.value = "安装包不存在，请重新下载"
+            return
+        }
+        runCatching { updateService.installApk(file) }
+            .onFailure { _notice.value = it.message ?: "无法打开安装器" }
+        if (!updateService.canInstallPackages()) {
+            _notice.value = "请允许 Mingyu Toolbox 安装未知应用后返回继续安装"
+        }
+    }
     fun setTheme(mode: ThemeMode) {
         prefs.edit().putString("theme", mode.name).apply()
         _theme.value = mode

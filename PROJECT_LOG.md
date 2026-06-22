@@ -233,3 +233,41 @@ Gradle or Manifest changed:
 - Kept scroll reading progress behavior unchanged.
 - Did not modify Gradle, AndroidManifest, existing `Services.kt`, import/storage behavior, or global theme behavior.
 - Verified `assembleDebug` succeeds.
+## 2026-06-22 In-App Update Flow
+
+- Added an in-app update system that checks `update/version.json` on GitHub raw and compares the remote `versionCode` with the installed app version.
+- Added startup auto-check behavior and a manual Settings entry for checking updates on demand.
+- Added update dialog UI with version information, changelog, download progress, retry/error messaging, and install action.
+- Added `UpdateService.kt` to fetch update metadata, download the GitHub Release APK, and open Android's system package installer through FileProvider.
+- Added FileProvider paths and `REQUEST_INSTALL_PACKAGES` permission required for user-confirmed APK installation.
+- Added `update/version.json` as the remote update metadata template. Future releases use tag `v{versionName}` and APK name `MingyuToolBox.apk`.
+- Did not modify Gradle, existing `Services.kt`, conversion/video/speed-test/reader business logic, or global theme behavior.
+- Verified `assembleDebug` succeeds.
+## 2026-06-22 Settings Update Entry Polish
+
+- Moved the manual update check entry out of its own collapsible Settings card.
+- Added a compact update button beside the Settings theme header so users can check updates without making Settings feel heavier.
+- Kept startup auto-check, update dialog, APK download, and installer flow unchanged.
+- Did not modify Gradle, AndroidManifest, `UpdateService.kt`, existing `Services.kt`, or unrelated app features.
+- Verified `assembleDebug` succeeds.
+## 2026-06-22 Update Button State Labels
+
+- Adjusted the compact Settings update button copy so it defaults to `Check Update` instead of implying an update is already available.
+- Added an `UpToDate` update phase for manual checks with no newer version.
+- The Settings update button now shows clear states: checking, up to date, update available, downloading, and install.
+- Kept startup auto-check, update dialog, APK download, and installer flow unchanged.
+- Did not modify Gradle, AndroidManifest, `UpdateService.kt`, existing `Services.kt`, or unrelated app features.
+- Verified `assembleDebug` succeeds.
+## 2026-06-22 Update Download Task Progress
+
+- Connected in-app update APK downloads to the existing Tasks screen.
+- Starting an update download now creates an app update download task.
+- Download progress updates both the update dialog and the Tasks progress bar.
+- Successful downloads mark the task as complete; failed downloads mark it as failed with the error message.
+- Did not modify Gradle, AndroidManifest, `UpdateService.kt`, existing `Services.kt`, or unrelated app features.
+- Verified `assembleDebug` succeeds.
+## 2026-06-22 v1.0 Version Metadata
+
+- Set app `versionName` to `1.0` for the first GitHub release tag `v1.0`.
+- Updated `update/version.json` to point the in-app update metadata at version `1.0` with current release notes.
+- Kept `versionCode` at `1` for the initial release.
