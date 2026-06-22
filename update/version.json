@@ -1,7 +1,7 @@
 {
   "versionCode": 3,
   "versionName": "1.1.0",
-  "apkUrl": "https://ghproxy.net/https://github.com/comstors/ToolBox/releases/download/v1.1.0/app-release.apk",
+  "apkUrl": "https://gitee.com/comstors/ToolBox/releases/download/v1.1.0/app-release.apk",
   "changelog": [
     "v1.1.0 测试更新版本",
     "仅用于验证应用内更新流程",
