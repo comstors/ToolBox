@@ -270,4 +270,8 @@ Gradle or Manifest changed:
 
 - Set app `versionName` to `1.0` for the first GitHub release tag `v1.0`.
 - Updated `update/version.json` to point the in-app update metadata at version `1.0` with current release notes.
-- Kept `versionCode` at `1` for the initial release.
+- Kept `versionCode` at `1` for the initial release.`r`n`r`n## 2026-06-22 v1.1 Update Test Release
+
+- Bumped app version metadata to `versionName` 1.1 and `versionCode` 2 for an update-flow test release.
+- Updated `update/version.json` so installed v1.0 builds can detect v1.1 as a newer version.
+- Did not change app features, UI behavior, business logic, AndroidManifest, or dependencies.

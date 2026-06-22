@@ -1,6 +1,6 @@
 {
-  "versionCode": 1,
-  "versionName": "1.0",
+  "versionCode": 2,
+  "versionName": "1.1",
   "changelog": [
     "新增 App 内自动检查更新和手动检查更新",
     "新增更新包下载进度和任务页进度显示",
