@@ -274,4 +274,8 @@ Gradle or Manifest changed:
 
 - Bumped app version metadata to `versionName` 1.1 and `versionCode` 2 for an update-flow test release.
 - Updated `update/version.json` so installed v1.0 builds can detect v1.1 as a newer version.
-- Did not change app features, UI behavior, business logic, AndroidManifest, or dependencies.
+- Did not change app features, UI behavior, business logic, AndroidManifest, or dependencies.`r`n`r`n## 2026-06-22 v1.1 Update Download Hotfix
+
+- Added the v1.1 APK under `update/MingyuToolBox.apk` so existing v1.0 clients can download it from GitHub raw instead of GitHub Release assets.
+- Added `apkUrl` to `update/version.json` to avoid the `github.com` Release download timeout seen on some domestic mobile networks.
+- Did not change app feature code, UI behavior, Gradle, AndroidManifest, or business logic.
