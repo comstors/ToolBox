@@ -54,10 +54,27 @@ fun SpeedTestScreen(vm: ToolboxViewModel) {
         item {
             GlassCard(modifier = Modifier.fillMaxWidth(), elevated = true) {
                 Column(verticalArrangement = Arrangement.spacedBy(18.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                    SectionHeader(
-                        title = "\u4e0b\u8f7d\u6d4b\u901f Lite",
-                        subtitle = "\u4f7f\u7528\u516c\u5f00\u6d4b\u8bd5\u6e90\u4f30\u7b97\u5f53\u524d\u4e0b\u8f7d\u901f\u5ea6\uff0c\u7ed3\u679c\u4ec5\u4f9b\u53c2\u8003\u3002"
-                    )
+                    Column(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Text(
+                            text = "下载测速 Lite",
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.titleMedium,
+                            fontWeight = FontWeight.SemiBold
+                        )
+
+                        Text(
+                            text = "使用公开测试源估算当前下载速度，结果仅供参考。",
+                            modifier = Modifier.fillMaxWidth(),
+                            textAlign = TextAlign.Center,
+                            style = MaterialTheme.typography.bodyMedium,
+                            color = toolboxPalette().textMuted
+                        )
+                    }
                     SpeedGauge(state = state)
                     Row(horizontalArrangement = Arrangement.spacedBy(10.dp), modifier = Modifier.fillMaxWidth()) {
                         if (testing) {

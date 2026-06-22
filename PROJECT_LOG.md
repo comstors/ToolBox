@@ -167,3 +167,69 @@ Gradle or Manifest changed:
 - Changed accent preset color values to normal ARGB `Long` values so Compose color creation follows the same pattern as the rest of the project.
 - Reproduced the crash with adb by launching the app and tapping Settings, then verified the same path enters Settings without a crash after the fix.
 - Verified `assembleDebug` succeeds.
+## 2026-06-21 Settings Folding Layout
+
+- Reduced Settings page visual weight by keeping Theme visible and moving optional sections into collapsible cards.
+- Appearance personalization is now collapsed by default and shows a short summary of the current accent/background choice.
+- Cache actions are collapsed by default.
+- About information was changed from a full card into a lightweight footer-style text block.
+- This change only affects Settings layout; theme logic, personalization persistence, business logic, Gradle, Manifest, and Services were not changed.
+- Verified `assembleDebug` succeeds. Emulator UI re-check was blocked by adb moving to `authorizing` after server restart.
+## 2026-06-21 Settings Fold Click Feedback Fix
+
+- Removed the default rectangular click highlight/ripple from collapsible Settings card headers.
+- Kept the existing fold/unfold behavior and arrow rotation.
+- This change only affects Settings click feedback; no theme, personalization persistence, business logic, Gradle, Manifest, or Services changes were made.
+- Verified `assembleDebug` succeeds.
+## 2026-06-22 Background Image Photo Picker
+
+- Changed the appearance personalization background image selector from document/file picking to Android's visual media photo picker.
+- The Settings page now opens a gallery-style image picker for custom background images instead of a folder-oriented document picker where supported by the system.
+- Kept existing personalization state, theme behavior, background rendering, Gradle, Manifest, and service logic unchanged.
+- Verified `assembleDebug` succeeds.
+## 2026-06-22 Local TXT Reader Lite
+
+- Added a first-pass local TXT novel reader module.
+- Added a home entry and route for the reader without changing the existing navigation architecture.
+- Added a lightweight reader shelf with TXT import, book list, continue-reading entry, progress display, and record removal that does not delete the original file.
+- Added a reading page with paragraph-based rendering, automatic progress saving, font size controls, line spacing controls, and reader-only background choices.
+- Added `ReaderService.kt` for TXT reading, UTF-8/GBK decoding, URI read permission handling, and reader shelf persistence through SharedPreferences.
+- Added reader state and events in `ToolboxViewModel.kt` for import, open, close, progress save, appearance controls, and shelf removal.
+- Did not modify Gradle, AndroidManifest, existing `Services.kt`, PDF conversion, video download, speed test logic, or global light/dark theme behavior.
+- Verified `assembleDebug` succeeds.
+## 2026-06-22 Reader Immersive Controls Pass
+
+- Reworked the TXT reader page into an immersive reading layout where the text is the default focus.
+- Added tap-to-show/tap-to-hide bottom controls with smooth fade, slide, and scale transitions.
+- Added a small side-mounted gear affordance for reader settings so typography and background controls do not cover the main reading area by default.
+- Added a bottom reader control card with shelf, table of contents, night mode, and settings entry points.
+- Added a lightweight table-of-contents panel using simple TXT chapter heading detection.
+- Moved font size, line spacing, background, and manual night mode controls into the reader settings panel.
+- Cleaned up reader UI/ViewModel Chinese copy using escaped strings to avoid Windows encoding corruption.
+- Did not modify Gradle, AndroidManifest, existing `Services.kt`, global light/dark theme behavior, PDF conversion, video download, or speed test logic.
+- Verified `assembleDebug` succeeds.
+## 2026-06-22 Reader Header And Page Mode
+
+- Changed the reader route header so active reading shows the current book title as the main title and the nearest detected chapter title as the subtitle.
+- Removed the fixed `Local TXT Reading` style header copy while reading; the shelf state now uses a lighter reader/shelf fallback.
+- Added a reader page mode preference with `Scroll` and `Horizontal` options.
+- Added a smooth horizontal pager reading mode that approximates side-to-side page turning without adding dependencies.
+- Persisted reader typography, background, and page mode preferences through the existing settings SharedPreferences.
+- Kept scroll mode as the default and preserved paragraph-based progress saving for both modes.
+- Did not modify Gradle, AndroidManifest, existing `Services.kt`, global theme behavior, PDF conversion, video download, or speed test logic.
+- Verified `assembleDebug` succeeds.
+## 2026-06-22 Reader Title And Paging Fix
+
+- Adjusted the reader route header so active reading no longer shows a chapter subtitle under the book title.
+- Added a compact reader-title sizing rule: normal titles stay prominent, longer book names shrink before falling back to ellipsis.
+- Reworked horizontal reader pagination to estimate page capacity from actual screen width, screen height, font size, and line spacing instead of using one fixed character count.
+- Split oversized paragraphs during horizontal pagination so a single long paragraph is less likely to overflow and get clipped at the bottom of the page.
+- Did not modify Gradle, AndroidManifest, existing `Services.kt`, import/storage behavior, or global theme behavior.
+## 2026-06-22 Reader Chapter Header And Page Progress Fix
+
+- Restored the current chapter subtitle under the reader book title.
+- Tightened the reader title font sizing so the book title and chapter subtitle can share the header without pushing the reading card down.
+- Fixed horizontal page mode progress so it advances by current page count instead of staying tied only to paragraph index.
+- Kept scroll reading progress behavior unchanged.
+- Did not modify Gradle, AndroidManifest, existing `Services.kt`, import/storage behavior, or global theme behavior.
+- Verified `assembleDebug` succeeds.

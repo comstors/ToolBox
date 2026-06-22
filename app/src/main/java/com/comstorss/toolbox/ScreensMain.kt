@@ -105,7 +105,8 @@ private data class HeaderContent(
     val eyebrow: String,
     val title: String,
     val subtitle: String,
-    val showBack: Boolean = false
+    val showBack: Boolean = false,
+    val compactTitle: Boolean = false
 )
 
 @Composable
@@ -378,10 +379,11 @@ fun MainShell(vm: ToolboxViewModel, theme: ThemeMode) {
     var tab by remember { mutableStateOf(MainTab.Home) }
     var route by remember { mutableStateOf(Route.Home) }
     val notice by vm.notice.collectAsState()
+    val reader by vm.reader.collectAsState()
     BackHandler(enabled = route != Route.Home || tab != MainTab.Home) {
         if (route != Route.Home) route = Route.Home else tab = MainTab.Home
     }
-    val header = headerFor(route, tab)
+    val header = headerFor(route, tab, reader)
 
     Scaffold(
         containerColor = Color.Transparent,
@@ -417,6 +419,7 @@ fun MainShell(vm: ToolboxViewModel, theme: ThemeMode) {
                         Route.Convert -> ConvertScreen(vm)
                         Route.Video -> VideoScreen(vm)
                         Route.SpeedTest -> SpeedTestScreen(vm)
+                        Route.Reader -> ReaderScreen(vm)
                         Route.Home -> when (state.second) {
                             MainTab.Home -> HomeScreen(vm.modules) { route = it }
                             MainTab.Tasks -> TaskScreen(vm)
@@ -456,8 +459,9 @@ private fun ShellHeader(header: HeaderContent, onBack: () -> Unit) {
             },
             label = "headerTransition"
         ) { data ->
+            val titleStyle = if (data.compactTitle) MaterialTheme.typography.headlineSmall else MaterialTheme.typography.headlineMedium
             Column(
-                modifier = Modifier.offset(y = 4.dp),
+                modifier = Modifier.fillMaxWidth().offset(y = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(4.dp)
             ) {
                 if (data.showBack) {
@@ -478,19 +482,37 @@ private fun ShellHeader(header: HeaderContent, onBack: () -> Unit) {
                 }
                 Text(
                     text = data.title,
-                    style = MaterialTheme.typography.headlineMedium,
-                    fontWeight = FontWeight.Black
+                    style = titleStyle,
+                    fontSize = if (data.compactTitle) compactReaderTitleSize(data.title) else titleStyle.fontSize,
+                    fontWeight = FontWeight.Black,
+                    maxLines = if (data.compactTitle) 1 else Int.MAX_VALUE,
+                    overflow = if (data.compactTitle) TextOverflow.Ellipsis else TextOverflow.Clip,
+                    modifier = Modifier.fillMaxWidth()
                 )
-                Text(
-                    text = data.subtitle,
-                    style = MaterialTheme.typography.labelLarge,
-                    color = palette.accent,
-                    fontWeight = FontWeight.Bold
-                )
+                if (data.subtitle.isNotBlank()) {
+                    Text(
+                        text = data.subtitle,
+                        style = MaterialTheme.typography.labelLarge,
+                        color = palette.accent,
+                        fontWeight = FontWeight.Bold,
+                        maxLines = 1,
+                        overflow = TextOverflow.Ellipsis,
+                        modifier = Modifier.fillMaxWidth()
+                    )
+                }
             }
         }
     }
 }
+
+private fun compactReaderTitleSize(title: String) = when {
+    title.length <= 10 -> 24.sp
+    title.length <= 16 -> 21.sp
+    title.length <= 24 -> 18.sp
+    title.length <= 34 -> 16.sp
+    else -> 15.sp
+}
+
 @Composable
 fun BottomTabs(current: MainTab, change: (MainTab) -> Unit) {
     val palette = toolboxPalette()
@@ -881,6 +903,7 @@ private fun screenMotionIndex(state: Pair<Route, MainTab>): Int {
         Route.Convert -> MainTab.entries.size
         Route.Video -> MainTab.entries.size + 1
         Route.SpeedTest -> MainTab.entries.size + 2
+        Route.Reader -> MainTab.entries.size + 3
     }
 }
 
@@ -888,7 +911,7 @@ private fun formatMotionIndex(tab: String): Int = when (tab) {
     "word" -> 1
     else -> 0
 }
-private fun headerFor(route: Route, tab: MainTab): HeaderContent {
+private fun headerFor(route: Route, tab: MainTab, reader: ReaderUiState): HeaderContent {
     return when (route) {
         Route.Convert -> HeaderContent(
             eyebrow = "\u683c\u5f0f\u8f6c\u6362",
@@ -908,6 +931,13 @@ private fun headerFor(route: Route, tab: MainTab): HeaderContent {
             subtitle = "\u8f7b\u91cf\u6d4b\u8bd5\u5f53\u524d\u7f51\u7edc\u4e0b\u8f7d\u8868\u73b0\u3002",
             showBack = true
         )
+        Route.Reader -> HeaderContent(
+            eyebrow = "",
+            title = reader.activeBook?.title ?: "\u5c0f\u8bf4\u9605\u8bfb\u5668",
+            subtitle = reader.currentChapterTitle(),
+            showBack = true,
+            compactTitle = true
+        )
         Route.Home -> when (tab) {
             MainTab.Home -> HeaderContent("Mingyu Toolbox", "\u9996\u9875", "\u672c\u5730\u5de5\u5177\u548c\u5e38\u7528\u6d41\u7a0b\u90fd\u4ece\u8fd9\u91cc\u8fdb\u5165\u3002")
             MainTab.Tasks -> HeaderContent("\u5f53\u524d\u4efb\u52a1", "\u4efb\u52a1", "\u8fdb\u884c\u4e2d\u7684\u8f6c\u6362\u548c\u4e0b\u8f7d\u4f1a\u663e\u793a\u5728\u8fd9\u91cc\u3002")
@@ -915,4 +945,21 @@ private fun headerFor(route: Route, tab: MainTab): HeaderContent {
             MainTab.Settings -> HeaderContent("\u504f\u597d\u8bbe\u7f6e", "\u8bbe\u7f6e", "\u4e3b\u9898\u3001\u7f13\u5b58\u548c\u5e94\u7528\u4fe1\u606f\u90fd\u96c6\u4e2d\u5728\u8fd9\u91cc\u3002")
         }
     }
+}
+
+private fun ReaderUiState.currentChapterTitle(): String {
+    val book = activeBook ?: return "\u672c\u5730\u4e66\u67b6"
+    if (paragraphs.isEmpty()) return "\u6b63\u6587\u9605\u8bfb\u4e2d"
+    val safeIndex = book.currentParagraph.coerceIn(0, (paragraphs.size - 1).coerceAtLeast(0))
+    for (index in safeIndex downTo 0) {
+        val title = paragraphs[index].trim().take(42)
+        if (isReaderChapterTitle(title)) return title
+    }
+    return "\u6b63\u6587\u9605\u8bfb\u4e2d"
+}
+
+private fun isReaderChapterTitle(text: String): Boolean {
+    if (text.isBlank()) return false
+    val pattern = Regex("^(第\\s*[0-9零一二三四五六七八九十百千万]+\\s*[章节回卷].*|Chapter\\s+\\d+.*)", RegexOption.IGNORE_CASE)
+    return pattern.containsMatchIn(text.trim())
 }

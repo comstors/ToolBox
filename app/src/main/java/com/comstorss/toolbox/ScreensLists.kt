@@ -1,5 +1,21 @@
 package com.comstorss.toolbox
 
+import androidx.compose.foundation.interaction.MutableInteractionSource
+
+import androidx.compose.material.icons.rounded.ExpandMore
+
+import androidx.compose.foundation.clickable
+
+import androidx.compose.runtime.setValue
+
+import androidx.compose.runtime.remember
+
+import androidx.compose.runtime.mutableStateOf
+
+import androidx.compose.ui.graphics.graphicsLayer
+
+import androidx.compose.animation.animateContentSize
+
 import androidx.compose.foundation.border
 
 import androidx.compose.material.icons.rounded.RestartAlt
@@ -10,6 +26,7 @@ import androidx.compose.foundation.rememberScrollState
 
 import androidx.compose.foundation.horizontalScroll
 
+import androidx.activity.result.PickVisualMediaRequest
 import androidx.activity.result.contract.ActivityResultContracts
 
 import androidx.activity.compose.rememberLauncherForActivityResult
@@ -187,12 +204,12 @@ fun HistoryCard(r: HistoryRecord, vm: ToolboxViewModel) {
 @Composable
 fun SettingsScreen(vm: ToolboxViewModel, theme: ThemeMode, setTheme: (ThemeMode) -> Unit, clear: () -> Unit) {
     val personalization by vm.personalization.collectAsState()
-    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri: Uri? ->
+    val imagePicker = rememberLauncherForActivityResult(ActivityResultContracts.PickVisualMedia()) { uri: Uri? ->
         vm.setBackgroundImage(uri)
     }
 
     androidx.compose.foundation.lazy.LazyColumn(
-        contentPadding = PaddingValues(bottom = 20.dp),
+        contentPadding = PaddingValues(bottom = 28.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item {
@@ -209,41 +226,81 @@ fun SettingsScreen(vm: ToolboxViewModel, theme: ThemeMode, setTheme: (ThemeMode)
             }
         }
         item {
-            AppearanceSettingsCard(
-                personalization = personalization,
-                setAccent = vm::setAccentPreset,
-                setBackgroundStyle = vm::setBackgroundStyle,
-                setTone = vm::setBackgroundImageTone,
-                chooseImage = { imagePicker.launch(arrayOf("image/*")) },
-                clearImage = { vm.setBackgroundImage(null) },
-                reset = vm::resetPersonalization
-            )
+            CollapsibleSettingsCard(
+                title = "\u5916\u89c2\u4e2a\u6027\u5316",
+                subtitle = "${personalization.accentPreset.label} \u00b7 ${personalization.backgroundStyle.label}",
+                initiallyExpanded = false
+            ) {
+                AppearanceSettingsCard(
+                    personalization = personalization,
+                    setAccent = vm::setAccentPreset,
+                    setBackgroundStyle = vm::setBackgroundStyle,
+                    setTone = vm::setBackgroundImageTone,
+                    chooseImage = { imagePicker.launch(PickVisualMediaRequest(ActivityResultContracts.PickVisualMedia.ImageOnly)) },
+                    clearImage = { vm.setBackgroundImage(null) },
+                    reset = vm::resetPersonalization
+                )
+            }
         }
         item {
-            Feature(
-                icon = Icons.Rounded.Settings,
+            CollapsibleSettingsCard(
                 title = "\u7f13\u5b58",
-                body = "\u6e05\u7406\u4e34\u65f6\u6587\u4ef6\uff0c\u4e0d\u5f71\u54cd\u5df2\u7ecf\u4fdd\u5b58\u7684\u8f93\u51fa\u6587\u4ef6\u3002",
-                button = "\u6e05\u7406\u7f13\u5b58",
-                click = clear
-            )
+                subtitle = "\u6e05\u7406\u4e34\u65f6\u6587\u4ef6\uff0c\u4e0d\u5f71\u54cd\u5df2\u4fdd\u5b58\u7684\u8f93\u51fa\u3002",
+                initiallyExpanded = false
+            ) {
+                Feature(
+                    icon = Icons.Rounded.Settings,
+                    title = "\u7f13\u5b58",
+                    body = "\u6e05\u7406\u4e34\u65f6\u6587\u4ef6\uff0c\u4e0d\u5f71\u54cd\u5df2\u7ecf\u4fdd\u5b58\u7684\u8f93\u51fa\u6587\u4ef6\u3002",
+                    button = "\u6e05\u7406\u7f13\u5b58",
+                    click = clear
+                )
+            }
         }
-        item {
-            GlassCard(modifier = Modifier.fillMaxWidth()) {
-                Column(verticalArrangement = Arrangement.spacedBy(10.dp)) {
-                    SectionHeader(
-                        title = "\u5173\u4e8e",
-                        subtitle = "\u5e94\u7528\u4fe1\u606f\u548c\u4f5c\u8005\u8054\u7cfb\u65b9\u5f0f\u3002"
-                    )
-                    SettingLine("\u5e94\u7528", "Mingyu Toolbox")
-                    SettingLine("\u4f5c\u8005\u5fae\u4fe1", "comstorss")
-                    SettingLine("\u8bf4\u660e", "\u5f00\u6e90\u8f6f\u4ef6\uff0c\u4ec5\u4f9b\u81ea\u5df1\u4f7f\u7528")
+        item { AboutFooter() }
+    }
+}
+
+@Composable
+private fun CollapsibleSettingsCard(
+    title: String,
+    subtitle: String,
+    initiallyExpanded: Boolean,
+    content: @Composable () -> Unit
+) {
+    var expanded by remember { mutableStateOf(initiallyExpanded) }
+    val rotation by animateFloatAsState(if (expanded) 180f else 0f, tween(220), label = "settingsExpand")
+    GlassCard(modifier = Modifier.fillMaxWidth(), padding = PaddingValues(16.dp)) {
+        Column(modifier = Modifier.animateContentSize(tween(220)), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+            Row(
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .clip(MaterialTheme.shapes.large)
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null
+                    ) { expanded = !expanded }
+                    .padding(4.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                Column(modifier = Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    Text(title, style = MaterialTheme.typography.titleMedium, fontWeight = FontWeight.SemiBold)
+                    Text(subtitle, style = MaterialTheme.typography.bodySmall, color = toolboxPalette().textMuted, maxLines = 1, overflow = TextOverflow.Ellipsis)
                 }
+                Icon(
+                    Icons.Rounded.ExpandMore,
+                    contentDescription = null,
+                    tint = toolboxPalette().textMuted,
+                    modifier = Modifier.graphicsLayer { rotationZ = rotation }
+                )
+            }
+            AnimatedVisibility(visible = expanded, enter = fadeIn(tween(160)), exit = fadeOut(tween(120))) {
+                content()
             }
         }
     }
 }
-
 @Composable
 private fun AppearanceSettingsCard(
     personalization: PersonalizationState,
@@ -355,6 +412,20 @@ private fun ColorDot(color: Color, selected: Boolean) {
             .background(color)
             .border(1.dp, if (selected) toolboxPalette().text else toolboxPalette().cardBorder, CircleShape)
     )
+}
+@Composable
+private fun AboutFooter() {
+    val palette = toolboxPalette()
+    Column(
+        modifier = Modifier
+            .fillMaxWidth()
+            .padding(horizontal = 18.dp, vertical = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(4.dp)
+    ) {
+        Text("Mingyu Toolbox \u00b7 comstorss", style = MaterialTheme.typography.labelMedium, color = palette.textMuted)
+        Text("\u5f00\u6e90\u8f6f\u4ef6\uff0c\u4ec5\u4f9b\u81ea\u5df1\u4f7f\u7528", style = MaterialTheme.typography.labelSmall, color = palette.textMuted)
+    }
 }
 @Composable
 fun ThemeRow(mode: ThemeMode, selected: Boolean, click: () -> Unit) {

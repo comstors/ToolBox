@@ -4,6 +4,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.rounded.Article
 import androidx.compose.material.icons.rounded.History
 import androidx.compose.material.icons.rounded.Home
+import androidx.compose.material.icons.rounded.MenuBook
 import androidx.compose.material.icons.rounded.Movie
 import androidx.compose.material.icons.rounded.Settings
 import androidx.compose.material.icons.rounded.Speed
@@ -36,7 +37,7 @@ data class PersonalizationState(
     val backgroundImageTone: BackgroundImageTone = BackgroundImageTone.Soft
 )
 enum class TaskStatus(val label: String) { Running("\u8fdb\u884c\u4e2d"), Success("\u5df2\u5b8c\u6210"), Failed("\u5931\u8d25") }
-enum class Route { Home, Convert, Video, SpeedTest }
+enum class Route { Home, Convert, Video, SpeedTest, Reader }
 enum class ConversionType(val label: String) { ImagesToPdf("\u56fe\u7247\u8f6c PDF"), DocxToPdf("Word \u8f6c PDF") }
 enum class PdfPageMode(val label: String) { A4("A4"), Original("\u539f\u56fe\u6bd4\u4f8b") }
 enum class PdfOrientation(val label: String) { Portrait("\u7ad6\u5411"), Landscape("\u6a2a\u5411") }
@@ -110,6 +111,34 @@ data class SpeedTestUiState(
     val rating: SpeedRating = SpeedRating.Unknown,
     val errorMessage: String? = null
 )
+
+enum class ReaderBackground(val label: String) {
+    Paper("\u7eb8\u5f20"), Warm("\u6696\u9ec4"), Dark("\u591c\u8bfb")
+}
+enum class ReaderPageMode(val label: String) {
+    Scroll("\u4e0a\u4e0b\u6eda\u52a8"), Horizontal("\u5de6\u53f3\u7ffb\u9875")
+}
+data class ReaderBook(
+    val id: String = UUID.randomUUID().toString(),
+    val title: String,
+    val uri: String,
+    val totalChars: Int = 0,
+    val currentParagraph: Int = 0,
+    val scrollOffset: Int = 0,
+    val progress: Float = 0f,
+    val lastReadAt: Long = System.currentTimeMillis()
+)
+data class ReaderUiState(
+    val books: List<ReaderBook> = emptyList(),
+    val activeBook: ReaderBook? = null,
+    val paragraphs: List<String> = emptyList(),
+    val loading: Boolean = false,
+    val errorMessage: String? = null,
+    val fontSizeSp: Float = 18f,
+    val lineSpacing: Float = 1.55f,
+    val background: ReaderBackground = ReaderBackground.Warm,
+    val pageMode: ReaderPageMode = ReaderPageMode.Scroll
+)
 data class VideoDownloadOutput(
     val displayName: String,
     val uri: String,
@@ -123,6 +152,7 @@ object ModuleRegistry {
     val modules = listOf(
         ToolModule("format", "\u683c\u5f0f\u8f6c\u6362", "\u56fe\u7247\u8f6c PDF\u3001Word \u8f6c PDF\uff0c\u672c\u5730\u5904\u7406\u66f4\u5b89\u5fc3\u3002", Icons.Rounded.Article, false, Route.Convert),
         ToolModule("video", "\u89c6\u9891\u4e0b\u8f7d", "\u6296\u97f3\u4e0e Bilibili \u94fe\u63a5\u89e3\u6790\u4e0b\u8f7d\u3002", Icons.Rounded.Movie, true, Route.Video),
-        ToolModule("speed", "\u7f51\u7edc\u6d4b\u901f", "\u8f7b\u91cf\u4e0b\u8f7d\u6d4b\u901f\uff0c\u5b9e\u65f6\u67e5\u770b\u7f51\u7edc\u8868\u73b0\u3002", Icons.Rounded.Speed, true, Route.SpeedTest)
+        ToolModule("speed", "\u7f51\u7edc\u6d4b\u901f", "\u8f7b\u91cf\u4e0b\u8f7d\u6d4b\u901f\uff0c\u5b9e\u65f6\u67e5\u770b\u7f51\u7edc\u8868\u73b0\u3002", Icons.Rounded.Speed, true, Route.SpeedTest),
+        ToolModule("reader", "\u5c0f\u8bf4\u9605\u8bfb\u5668", "\u672c\u5730 TXT \u9605\u8bfb\uff0c\u81ea\u52a8\u8bb0\u4f4f\u4e0a\u6b21\u770b\u5230\u7684\u4f4d\u7f6e\u3002", Icons.Rounded.MenuBook, false, Route.Reader)
     )
 }

@@ -23,6 +23,7 @@ class ToolboxViewModel(app: Application) : AndroidViewModel(app) {
     private val docxPdf = DocxPdfService(app)
     private val videoService = VideoService(app)
     private val speedTestService = NetworkSpeedTestService(app)
+    private val readerService = ReaderService(app)
     private val historyStore = HistoryStore(app)
     private val fileActions = FileActionService(app)
     private var speedTestJob: Job? = null
@@ -49,6 +50,9 @@ class ToolboxViewModel(app: Application) : AndroidViewModel(app) {
 
     private val _speedTest = MutableStateFlow(SpeedTestUiState(network = speedTestService.networkKind()))
     val speedTest: StateFlow<SpeedTestUiState> = _speedTest.asStateFlow()
+
+    private val _reader = MutableStateFlow(loadReaderState())
+    val reader: StateFlow<ReaderUiState> = _reader.asStateFlow()
 
     fun setTheme(mode: ThemeMode) {
         prefs.edit().putString("theme", mode.name).apply()
@@ -105,6 +109,29 @@ class ToolboxViewModel(app: Application) : AndroidViewModel(app) {
             backgroundImageUri = prefs.getString("backgroundImageUri", null),
             backgroundImageTone = enumValue(prefs.getString("backgroundImageTone", null), BackgroundImageTone.Soft, BackgroundImageTone.entries.toTypedArray())
         )
+    }
+
+
+    private fun loadReaderState(): ReaderUiState {
+        fun <T : Enum<T>> enumValue(name: String?, fallback: T, values: Array<T>): T {
+            return values.firstOrNull { it.name == name } ?: fallback
+        }
+        return ReaderUiState(
+            books = readerService.loadBooks(),
+            fontSizeSp = prefs.getFloat("readerFontSizeSp", 18f),
+            lineSpacing = prefs.getFloat("readerLineSpacing", 1.55f),
+            background = enumValue(prefs.getString("readerBackground", null), ReaderBackground.Warm, ReaderBackground.entries.toTypedArray()),
+            pageMode = enumValue(prefs.getString("readerPageMode", null), ReaderPageMode.Scroll, ReaderPageMode.entries.toTypedArray())
+        )
+    }
+
+    private fun persistReaderStyle(state: ReaderUiState = _reader.value) {
+        prefs.edit()
+            .putFloat("readerFontSizeSp", state.fontSizeSp)
+            .putFloat("readerLineSpacing", state.lineSpacing)
+            .putString("readerBackground", state.background.name)
+            .putString("readerPageMode", state.pageMode.name)
+            .apply()
     }
 
     fun clearNotice() { _notice.value = null }
@@ -225,6 +252,112 @@ class ToolboxViewModel(app: Application) : AndroidViewModel(app) {
         else -> SpeedRating.Unknown
     }
 
+
+    fun importReaderTxt(uri: Uri) = viewModelScope.launch {
+        _reader.value = _reader.value.copy(loading = true, errorMessage = null)
+        val result = withContext(Dispatchers.IO) { readerService.importTxt(uri, _reader.value.books) }
+        result.onSuccess { (book, paragraphs) ->
+            val updatedBooks = upsertReaderBook(book)
+            readerService.saveBooks(updatedBooks)
+            _reader.value = _reader.value.copy(
+                books = updatedBooks,
+                activeBook = book,
+                paragraphs = paragraphs,
+                loading = false,
+                errorMessage = null
+            )
+            _notice.value = "\u5df2\u5bfc\u5165 TXT\uff0c\u5df2\u8fdb\u5165\u9605\u8bfb"
+        }.onFailure { error ->
+            _reader.value = _reader.value.copy(loading = false, errorMessage = error.message ?: "TXT \u5bfc\u5165\u5931\u8d25")
+            _notice.value = error.message ?: "TXT \u5bfc\u5165\u5931\u8d25"
+        }
+    }
+
+    fun openReaderBook(book: ReaderBook) = viewModelScope.launch {
+        _reader.value = _reader.value.copy(loading = true, errorMessage = null)
+        val result = withContext(Dispatchers.IO) { readerService.readBook(book) }
+        result.onSuccess { paragraphs ->
+            val opened = book.copy(lastReadAt = System.currentTimeMillis())
+            val updatedBooks = upsertReaderBook(opened)
+            readerService.saveBooks(updatedBooks)
+            _reader.value = _reader.value.copy(
+                books = updatedBooks,
+                activeBook = opened,
+                paragraphs = paragraphs,
+                loading = false,
+                errorMessage = null
+            )
+        }.onFailure { error ->
+            _reader.value = _reader.value.copy(loading = false, errorMessage = error.message ?: "\u6253\u5f00 TXT \u5931\u8d25")
+            _notice.value = error.message ?: "\u6253\u5f00 TXT \u5931\u8d25"
+        }
+    }
+
+    fun closeReaderBook() {
+        _reader.value = _reader.value.copy(activeBook = null, paragraphs = emptyList(), errorMessage = null)
+    }
+
+    fun saveReaderProgress(paragraphIndex: Int, scrollOffset: Int) {
+        saveReaderProgressInternal(paragraphIndex, scrollOffset, null)
+    }
+
+    fun saveReaderPageProgress(paragraphIndex: Int, scrollOffset: Int, pageProgress: Float) {
+        saveReaderProgressInternal(paragraphIndex, scrollOffset, pageProgress.coerceIn(0f, 1f))
+    }
+
+    private fun saveReaderProgressInternal(paragraphIndex: Int, scrollOffset: Int, progressOverride: Float?) {
+        val state = _reader.value
+        val book = state.activeBook ?: return
+        val safeIndex = paragraphIndex.coerceIn(0, (state.paragraphs.size - 1).coerceAtLeast(0))
+        val progress = progressOverride ?: if (state.paragraphs.isEmpty()) 0f else ((safeIndex + 1).toFloat() / state.paragraphs.size).coerceIn(0f, 1f)
+        val updated = book.copy(
+            currentParagraph = safeIndex,
+            scrollOffset = scrollOffset.coerceAtLeast(0),
+            progress = progress,
+            lastReadAt = System.currentTimeMillis()
+        )
+        val updatedBooks = upsertReaderBook(updated)
+        readerService.saveBooks(updatedBooks)
+        _reader.value = state.copy(books = updatedBooks, activeBook = updated)
+    }
+
+    fun deleteReaderBook(book: ReaderBook) {
+        val updatedBooks = _reader.value.books.filterNot { it.id == book.id }
+        readerService.saveBooks(updatedBooks)
+        val isActive = _reader.value.activeBook?.id == book.id
+        _reader.value = _reader.value.copy(
+            books = updatedBooks,
+            activeBook = if (isActive) null else _reader.value.activeBook,
+            paragraphs = if (isActive) emptyList() else _reader.value.paragraphs
+        )
+        _notice.value = "\u5df2\u4ece\u4e66\u67b6\u79fb\u9664\uff0c\u539f\u6587\u4ef6\u4e0d\u4f1a\u5220\u9664"
+    }
+
+    fun adjustReaderFont(delta: Float) {
+        val next = (_reader.value.fontSizeSp + delta).coerceIn(14f, 28f)
+        _reader.value = _reader.value.copy(fontSizeSp = next)
+        persistReaderStyle()
+    }
+
+    fun adjustReaderLineSpacing(delta: Float) {
+        val next = (_reader.value.lineSpacing + delta).coerceIn(1.2f, 2.3f)
+        _reader.value = _reader.value.copy(lineSpacing = next)
+        persistReaderStyle()
+    }
+
+    fun setReaderBackground(background: ReaderBackground) {
+        _reader.value = _reader.value.copy(background = background)
+        persistReaderStyle()
+    }
+
+    fun setReaderPageMode(mode: ReaderPageMode) {
+        _reader.value = _reader.value.copy(pageMode = mode)
+        persistReaderStyle()
+    }
+
+    private fun upsertReaderBook(book: ReaderBook): List<ReaderBook> {
+        return listOf(book) + _reader.value.books.filterNot { it.id == book.id || it.uri == book.uri }
+    }
     fun parseVideo(input: String) = viewModelScope.launch {
         if (input.isBlank()) {
             _notice.value = "\u8bf7\u5148\u7c98\u8d34\u94fe\u63a5"
